@@ -1,13 +1,13 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:printing/printing.dart';
 import 'package:tax_calc/models/it_statement_models.dart';
 import 'package:tax_calc/screens/it_statement_screen.dart';
 import 'package:tax_calc/services/pdf_statement_service.dart';
 import 'package:tax_calc/services/tax_calculator_service.dart';
 import 'package:tax_calc/utils/it_formatters.dart';
+
+// Import brand tokens from main
+import 'package:tax_calc/main.dart';
 
 class ItDataEntryScreen extends StatefulWidget {
   const ItDataEntryScreen({super.key});
@@ -19,7 +19,6 @@ class ItDataEntryScreen extends StatefulWidget {
 class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TaxCalculatorService _calculatorService = TaxCalculatorService();
-  final PdfStatementService _pdfService = PdfStatementService();
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _penController = TextEditingController();
@@ -53,31 +52,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     super.dispose();
   }
 
-  Future<void> _viewStatement() async {
-    final TaxComputationResult? result = _calculateResult();
-    if (result == null) {
-      return;
-    }
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ItStatementScreen(result: result),
-      ),
-    );
-  }
-
-  Future<void> _downloadPdfDirectly() async {
-    final TaxComputationResult? result = _calculateResult();
-    if (result == null) {
-      return;
-    }
-    await _buildAndPrintPdf(result);
-  }
-
-  TaxComputationResult? _calculateResult() {
-    if (!_formKey.currentState!.validate()) {
-      return null;
-    }
+  void _viewStatement() {
+    if (!_formKey.currentState!.validate()) return;
 
     final EmployeeInput input = EmployeeInput(
       name: _nameController.text.trim(),
@@ -92,143 +68,279 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       remainingMonths: int.parse(_remainingMonthsController.text.trim()),
     );
 
-    return _calculatorService.compute(input);
-  }
+    final TaxComputationResult result = _calculatorService.compute(input);
 
-  Future<void> _buildAndPrintPdf(TaxComputationResult result) async {
-    try {
-      final Uint8List pdfBytes = await _runWithLoading(
-        () => _pdfService.buildPdf(result),
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      await Printing.layoutPdf(
-        name: PdfStatementService.suggestedFileName(result.input.name),
-        onLayout: (_) async => pdfBytes,
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to generate PDF: $error')),
-      );
-    }
-  }
-
-  Future<T> _runWithLoading<T>(Future<T> Function() action) async {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Dialog(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Generating PDF...'),
-            ],
-          ),
-        ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ItStatementScreen(result: result),
       ),
     );
-
-    try {
-      return await action();
-    } finally {
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("HB's TAX CALCULATOR 2026-27")),
+      backgroundColor: kBackground,
+      // ── AppBar ────────────────────────────────────────────────────────────
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Column(
+          children: [
+            AppBar(
+              title: const Text("HB's INCOME TAX CALCULATOR"),
+              actions: [
+                Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: kGold.withOpacity(0.6)),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: const Text(
+                    'FY 2026–27',
+                    style: TextStyle(
+                      color: kGoldLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
             children: [
+              // ── Section: Employee Details ──────────────────────────────
               _SectionCard(
                 title: 'Employee Details',
                 child: Column(
                   children: [
-                    _buildNameField(),
-                    const SizedBox(height: 12),
-                    _buildPenField(),
-                    const SizedBox(height: 12),
-                    _buildPanField(),
+                    _buildField(
+                      controller: _nameController,
+                      label: 'Full Name of Employee',
+                      capitalization: TextCapitalization.words,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Name is required'
+                          : null,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            controller: _penController,
+                            label: 'PEN',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            validator: (v) =>
+                                _validateInt(v, name: 'PEN', min: 1),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildField(
+                            controller: _panController,
+                            label: 'PAN',
+                            capitalization: TextCapitalization.characters,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(10),
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[a-zA-Z0-9]')),
+                              UpperCaseTextFormatter(),
+                            ],
+                            letterSpacing: 2.0,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty)
+                                return 'PAN is required';
+                              if (!RegExp(r'^[A-Z0-9]{10}$')
+                                  .hasMatch(v.trim().toUpperCase()))
+                                return 'Must be 10 alphanumeric';
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 16),
+
+              // ── Section: Salary Details ────────────────────────────────
               _SectionCard(
-                title: 'Salary & Tax Inputs',
+                title: 'Salary Details',
                 child: Column(
                   children: [
-                    _buildNumberField(
-                      controller: _basicPayController,
-                      label: 'Basic Pay on March 2026',
-                      min: 0,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            controller: _basicPayController,
+                            label: 'Basic Pay — Mar 2026',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            prefixText: '₹ ',
+                            validator: (v) =>
+                                _validateInt(v, name: 'Basic Pay', min: 0),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildField(
+                            controller: _daPercentController,
+                            label: 'DA Percentage',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            suffixText: '%',
+                            validator: (v) =>
+                                _validateInt(v, name: 'DA %', min: 0),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _incrementMonthController,
-                      label: 'Next Increment Month (1-12)',
-                      min: 1,
-                      max: 12,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _bpAfterIncrementController,
-                      label: 'BP After Increment',
-                      min: 0,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _otherIncomeController,
-                      label: 'Any Other Income – Surrender/Arrears etc',
-                      min: 0,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _taxAlreadyPaidController,
-                      label: 'Tax Already Paid',
-                      min: 0,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _daPercentController,
-                      label: 'DA %',
-                      min: 0,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildNumberField(
-                      controller: _remainingMonthsController,
-                      label: 'Remaining Months',
-                      min: 1,
-                      max: 12,
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            controller: _incrementMonthController,
+                            label: 'Increment Month',
+                            hint: '1 – 12',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            validator: (v) => _validateInt(v,
+                                name: 'Increment Month', min: 1, max: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildField(
+                            controller: _bpAfterIncrementController,
+                            label: 'BP After Increment',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            prefixText: '₹ ',
+                            validator: (v) => _validateInt(v,
+                                name: 'BP After Increment', min: 0),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 16),
+
+              // ── Section: Tax Details ───────────────────────────────────
+              _SectionCard(
+                title: 'Tax Details',
+                child: Column(
+                  children: [
+                    _buildField(
+                      controller: _otherIncomeController,
+                      label: 'Other Income  (Arrears / Surrender / etc.)',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      prefixText: '₹ ',
+                      validator: (v) =>
+                          _validateInt(v, name: 'Other Income', min: 0),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            controller: _taxAlreadyPaidController,
+                            label: 'Tax Already Paid',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            prefixText: '₹ ',
+                            validator: (v) => _validateInt(v,
+                                name: 'Tax Already Paid', min: 0),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildField(
+                            controller: _remainingMonthsController,
+                            label: 'Remaining Months',
+                            hint: '1 – 12',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            validator: (v) => _validateInt(v,
+                                name: 'Remaining Months', min: 1, max: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              // ── Submit button ──────────────────────────────────────────
               FilledButton(
                 onPressed: _viewStatement,
-                child: const Text('VIEW IT STATEMENT'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: kNavy,
+                  foregroundColor: kSurface,
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                  ),
+                ).copyWith(
+                  overlayColor:
+                      WidgetStateProperty.all(kGold.withOpacity(0.12)),
+                ),
+                child: const Text('VIEW STATEMENT'),
               ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: _downloadPdfDirectly,
-                child: const Text('DOWNLOAD PDF'),
+
+              const SizedBox(height: 20),
+
+              // ── Footer note ────────────────────────────────────────────
+              const Center(
+                child: Text(
+                  "HB's Income Tax Calculator •  FY 2026–27",
+                  style: TextStyle(
+                    color: kTextMuted,
+                    fontSize: 11,
+                    letterSpacing: 0.3,
+                  ),
+                ),
               ),
             ],
           ),
@@ -237,137 +349,107 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     );
   }
 
-  Widget _buildNameField() {
-    return TextFormField(
-      controller: _nameController,
-      textCapitalization: TextCapitalization.words,
-      decoration: const InputDecoration(
-        labelText: 'Name of Employee',
-        border: OutlineInputBorder(),
-      ),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Name of Employee is required';
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildPenField() {
-    return TextFormField(
-      controller: _penController,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: const InputDecoration(
-        labelText: 'PEN',
-        border: OutlineInputBorder(),
-      ),
-      validator: (value) => _validateInteger(
-        value,
-        fieldName: 'PEN',
-        min: 1,
-      ),
-    );
-  }
-
-  Widget _buildPanField() {
-    return TextFormField(
-      controller: _panController,
-      textCapitalization: TextCapitalization.characters,
-      inputFormatters: [
-        LengthLimitingTextInputFormatter(10),
-        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-        UpperCaseTextFormatter(),
-      ],
-      decoration: const InputDecoration(
-        labelText: 'PAN',
-        border: OutlineInputBorder(),
-      ),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'PAN is required';
-        }
-        final String pan = value.trim().toUpperCase();
-        if (!RegExp(r'^[A-Z0-9]{10}$').hasMatch(pan)) {
-          return 'PAN must be 10 alphanumeric characters';
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildNumberField({
+  // ── Field builder ──────────────────────────────────────────────────────────
+  Widget _buildField({
     required TextEditingController controller,
     required String label,
-    required int min,
-    int? max,
+    String? hint,
+    TextCapitalization capitalization = TextCapitalization.none,
+    TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+    String? prefixText,
+    String? suffixText,
+    double? letterSpacing,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+      textCapitalization: capitalization,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      style: TextStyle(
+        fontSize: 14,
+        color: kTextPrimary,
+        fontWeight: FontWeight.w500,
+        letterSpacing: letterSpacing,
+      ),
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
+        hintText: hint,
+        prefixText: prefixText,
+        suffixText: suffixText,
+        prefixStyle: const TextStyle(
+            color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+        suffixStyle: const TextStyle(
+            color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w600),
       ),
-      validator: (value) => _validateInteger(
-        value,
-        fieldName: label,
-        min: min,
-        max: max,
-      ),
+      validator: validator,
     );
   }
 
-  String? _validateInteger(
-    String? value, {
-    required String fieldName,
-    required int min,
-    int? max,
-  }) {
-    if (value == null || value.trim().isEmpty) {
-      return '$fieldName is required';
-    }
-
-    final int? parsed = int.tryParse(value.trim());
-    if (parsed == null) {
-      return '$fieldName must be a valid number';
-    }
-    if (parsed < min) {
-      return '$fieldName must be at least $min';
-    }
-    if (max != null && parsed > max) {
-      return '$fieldName must be at most $max';
-    }
+  // ── Validator ──────────────────────────────────────────────────────────────
+  String? _validateInt(String? value,
+      {required String name, required int min, int? max}) {
+    if (value == null || value.trim().isEmpty) return '$name is required';
+    final int? n = int.tryParse(value.trim());
+    if (n == null) return 'Enter a valid number';
+    if (n < min) return 'Minimum value is $min';
+    if (max != null && n > max) return 'Maximum value is $max';
     return null;
   }
 }
 
+// ── Section Card ──────────────────────────────────────────────────────────────
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
+  const _SectionCard({
+    required this.title,
+    required this.child,
+  });
 
   final String title;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header with gold left border
+          Container(
+            decoration: const BoxDecoration(
+              color: kBackground,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
+              border: Border(
+                bottom: BorderSide(color: kBorder),
+              ),
             ),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  style: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: child,
+          ),
+        ],
       ),
     );
   }
