@@ -33,6 +33,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       TextEditingController();
   final TextEditingController _otherIncomeController =
       TextEditingController(text: '0');
+  final TextEditingController _reliefController =
+      TextEditingController(text: '0');
   final TextEditingController _taxAlreadyPaidController =
       TextEditingController(text: '0');
   final TextEditingController _daPercentController =
@@ -63,7 +65,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     _basicPayController.addListener(_autoCalcBp);
   }
 
-  /// Populate controllers from the Hive draft (if one exists).
   void _loadSavedData() {
     final ItFormDataHive? saved = _persistence.load();
     if (saved == null) return;
@@ -76,6 +77,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     _basicPayController.text = saved.basicPayMarch2026;
     _bpAfterIncrementController.text = saved.bpAfterIncrement;
     _otherIncomeController.text = saved.otherIncome;
+    _reliefController.text = saved.relief;
     _taxAlreadyPaidController.text = saved.taxAlreadyPaid;
     _daPercentController.text = saved.daPercent;
     _remainingMonthsController.text = saved.remainingMonths;
@@ -87,7 +89,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     });
   }
 
-  /// Snapshot every controller + dropdown value into Hive.
   Future<void> _saveData() async {
     final data = ItFormDataHive(
       name: _nameController.text.trim(),
@@ -100,6 +101,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       nextIncrementMonth: _selectedIncrementMonth ?? -1,
       bpAfterIncrement: _bpAfterIncrementController.text.trim(),
       otherIncome: _otherIncomeController.text.trim(),
+      relief: _reliefController.text.trim(),
       taxAlreadyPaid: _taxAlreadyPaidController.text.trim(),
       daPercent: _daPercentController.text.trim(),
       remainingMonths: _remainingMonthsController.text.trim(),
@@ -107,7 +109,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     await _persistence.save(data);
   }
 
-  // ── Auto-calc BP after increment ─────────────────────────────────────────────
+  // ── Auto-calc BP ─────────────────────────────────────────────────────────────
 
   void _autoCalcBp() {
     final int? bp = int.tryParse(_basicPayController.text.trim());
@@ -154,6 +156,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     _basicPayController.dispose();
     _bpAfterIncrementController.dispose();
     _otherIncomeController.dispose();
+    _reliefController.dispose();
     _taxAlreadyPaidController.dispose();
     _daPercentController.dispose();
     _remainingMonthsController.dispose();
@@ -174,7 +177,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       return;
     }
 
-    // Persist before navigating away.
     await _saveData();
 
     final EmployeeInput input = EmployeeInput(
@@ -188,6 +190,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       nextIncrementDate: _selectedIncrementMonth!,
       bpAfterIncrement: int.parse(_bpAfterIncrementController.text.trim()),
       otherIncome: int.parse(_otherIncomeController.text.trim()),
+      relief: int.parse(_reliefController.text.trim()),
       taxAlreadyPaid: int.parse(_taxAlreadyPaidController.text.trim()),
       daPercent: int.parse(_daPercentController.text.trim()),
       remainingMonths: int.parse(_remainingMonthsController.text.trim()),
@@ -200,7 +203,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     ));
   }
 
-  // ── Clear form ─────────────────────────────────────────────────────────────
+  // ── Clear form ────────────────────────────────────────────────────────────────
 
   Future<void> _clearForm() async {
     final bool? confirmed = await showDialog<bool>(
@@ -236,6 +239,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     _basicPayController.clear();
     _bpAfterIncrementController.clear();
     _otherIncomeController.text = '0';
+    _reliefController.text = '0';
     _taxAlreadyPaidController.text = '0';
     _daPercentController.text = '35';
     _remainingMonthsController.text = '12';
@@ -374,6 +378,18 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
                       prefix: '₹ ',
                       validator: (v) =>
                           _validateInt(v, name: 'Other Income', min: 0)),
+                  _gap(),
+                  // ── Relief u/s 89(1) ────────────────────────────────────
+                  _field(
+                      _reliefController,
+                      'Relief for Salary Arrears u/s 89(1)',
+                      icon: Icons.shield_outlined,
+                      hint: 'Form 10E to be produced',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                      prefix: '₹ ',
+                      validator: (v) =>
+                          _validateInt(v, name: 'Relief u/s 89(1)', min: 0)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -403,7 +419,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
               const SizedBox(height: 28),
               _buildSubmitButton(),
               const SizedBox(height: 12),
-              // ── Clear button (only shown when a draft exists) ─────────────
               if (_persistence.hasSavedData) _buildClearButton(),
               const SizedBox(height: 16),
               _buildFooter(),
@@ -413,8 +428,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       ),
     );
   }
-
-  // ── AppBar ────────────────────────────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
@@ -437,8 +450,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
         child: Container(
           height: 3,
           decoration: const BoxDecoration(
-            gradient:
-                LinearGradient(colors: [Color(0xFF00ACC1), Color(0xFF00897B)]),
+            gradient: LinearGradient(
+                colors: [Color(0xFF00ACC1), Color(0xFF00897B)]),
           ),
         ),
       ),
@@ -462,8 +475,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     );
   }
 
-  // ── Hero header ───────────────────────────────────────────────────────────────
-
   Widget _buildHeroHeader() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -477,22 +488,23 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       ),
       child: Row(children: [
         Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('NEW REGIME',
-                style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2)),
-            const SizedBox(height: 6),
-            const Text('Tax Statement\n2026 – 27',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.25)),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('NEW REGIME',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2)),
+                SizedBox(height: 6),
+                Text('Tax Statement\n2026 – 27',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25)),
+              ]),
         ),
         Container(
           width: 68,
@@ -508,8 +520,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       ]),
     );
   }
-
-  // ── Section card ──────────────────────────────────────────────────────────────
 
   Widget _buildSection({
     required IconData icon,
@@ -534,8 +544,10 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           decoration: BoxDecoration(
             color: color.withOpacity(0.06),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            border: Border(bottom: BorderSide(color: color.withOpacity(0.15))),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(15)),
+            border:
+                Border(bottom: BorderSide(color: color.withOpacity(0.15))),
           ),
           child: Row(children: [
             Container(
@@ -549,19 +561,20 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
             const SizedBox(width: 10),
             Text(title,
                 style: TextStyle(
-                    color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
           ]),
         ),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, children: children),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children),
         ),
       ]),
     );
   }
-
-  // ── Text field ────────────────────────────────────────────────────────────────
 
   Widget _field(
     TextEditingController controller,
@@ -599,8 +612,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     );
   }
 
-  // ── Styled dropdown ───────────────────────────────────────────────────────────
-
   Widget _styledDropdown<T>({
     required String label,
     required IconData icon,
@@ -619,11 +630,11 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       style: const TextStyle(
           fontSize: 14, color: kTextPrimary, fontWeight: FontWeight.w500),
       dropdownColor: kSurface,
-      icon:
-          const Icon(Icons.keyboard_arrow_down_rounded, color: kTextSecondary),
+      icon: const Icon(Icons.keyboard_arrow_down_rounded,
+          color: kTextSecondary),
       items: items
-          .map((item) =>
-              DropdownMenuItem<T>(value: item, child: Text(itemLabel(item))))
+          .map((item) => DropdownMenuItem<T>(
+              value: item, child: Text(itemLabel(item))))
           .toList(),
       onChanged: onChanged,
       validator: validator,
@@ -631,8 +642,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   SizedBox _gap() => const SizedBox(height: 14);
-
-  // ── Submit button ─────────────────────────────────────────────────────────────
 
   Widget _buildSubmitButton() {
     return Container(
@@ -655,24 +664,24 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
           splashColor: Colors.white.withOpacity(0.1),
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child:
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('VIEW TAX STATEMENT',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8)),
-            ]),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.bar_chart_rounded,
+                      color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text('VIEW TAX STATEMENT',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8)),
+                ]),
           ),
         ),
       ),
     );
   }
-
-  // ── Clear button ──────────────────────────────────────────────────────────────
 
   Widget _buildClearButton() {
     return OutlinedButton.icon(
@@ -689,8 +698,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     );
   }
 
-  // ── Footer ────────────────────────────────────────────────────────────────────
-
   Widget _buildFooter() {
     return Center(
       child: Row(mainAxisSize: MainAxisSize.min, children: const [
@@ -701,8 +708,6 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       ]),
     );
   }
-
-  // ── Validators ────────────────────────────────────────────────────────────────
 
   String? _validateInt(String? value,
       {required String name, required int min, int? max}) {

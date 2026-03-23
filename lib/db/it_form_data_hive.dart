@@ -1,4 +1,3 @@
-
 import 'package:hive/hive.dart';
 
 part 'it_form_data_hive.g.dart';
@@ -19,13 +18,14 @@ class ItFormDataHive extends HiveObject {
     required this.taxAlreadyPaid,
     required this.daPercent,
     required this.remainingMonths,
+    required this.relief,
   });
 
   @HiveField(0)
   String name;
 
   @HiveField(1)
-  String pen; // stored as String to match the text controller
+  String pen;
 
   @HiveField(2)
   String pan;
@@ -60,4 +60,8 @@ class ItFormDataHive extends HiveObject {
 
   @HiveField(12)
   String remainingMonths;
+
+  /// Relief for Salary Arrears u/s 89(1). Stored as String to match controller.
+  @HiveField(13)
+  String relief;
 }

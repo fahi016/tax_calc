@@ -27,7 +27,6 @@ class PdfStatementService {
     final pw.Document doc = pw.Document();
     final pw.ThemeData theme = pw.ThemeData.withFont(base: base, bold: bold);
 
-    // ── Style constants ──────────────────────────────────────────────────────
     const double sectionSize = 7.0;
     const double cellSize = 7.0;
     const double headerSize = 7.5;
@@ -74,6 +73,8 @@ class PdfStatementService {
     }).toList();
 
     // ── Tax summary rows ─────────────────────────────────────────────────────
+    final bool hasRelief = result.reliefUs89 > 0;
+
     final List<_SummaryRow> summaryRows = [
       _SummaryRow('Total Salary Income',
           ItFormatters.formatCurrency(result.totalSalaryIncome)),
@@ -96,6 +97,18 @@ class PdfStatementService {
       _SummaryRow(
           'Net Tax Payable', ItFormatters.formatCurrency(result.netTaxPayable),
           bold: true, topBorder: true),
+      // ── Relief u/s 89(1) — only included when non-zero ──────────────────
+      if (hasRelief)
+        _SummaryRow(
+          'Relief for Salary Arrears u/s 89',
+          '- ${ItFormatters.formatCurrency(result.reliefUs89)}',
+          topBorder: true,
+        ),
+      if (hasRelief)
+        _SummaryRow('Tax After Relief u/s 89(1)',
+            ItFormatters.formatCurrency(result.taxAfterRelief),
+            bold: true),
+      // ── TDS block ────────────────────────────────────────────────────────
       _SummaryRow('Tax Already Paid',
           ItFormatters.formatCurrency(result.input.taxAlreadyPaid),
           topBorder: true),
@@ -115,7 +128,6 @@ class PdfStatementService {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // ── HEADER: Matches the tax sheet design ──────────────────────
             _buildDocumentHeader(
               base: base,
               bold: bold,
@@ -125,7 +137,7 @@ class PdfStatementService {
             ),
             pw.SizedBox(height: 6),
 
-            // ── ROW 1: Salary Table (full width) ─────────────────────────
+            // ── Salary Table ──────────────────────────────────────────────
             pw.Text('MONTHLY SALARY BREAKDOWN', style: sectionStyle),
             pw.SizedBox(height: 3),
             pw.TableHelper.fromTextArray(
@@ -149,7 +161,7 @@ class PdfStatementService {
             ),
             pw.SizedBox(height: 6),
 
-            // ── Tax Computation Summary (full width) ──────────────────────
+            // ── Tax Computation Summary ───────────────────────────────────
             pw.Text('TAX COMPUTATION SUMMARY', style: sectionStyle),
             pw.SizedBox(height: 3),
             pw.Container(
@@ -188,8 +200,10 @@ class PdfStatementService {
                       child: pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text(row.label,
-                              style: row.bold ? cellBoldStyle : cellStyle),
+                          pw.Expanded(
+                            child: pw.Text(row.label,
+                                style: row.bold ? cellBoldStyle : cellStyle),
+                          ),
                           pw.Text(row.value,
                               style: row.bold ? cellBoldStyle : cellStyle),
                         ],
@@ -201,7 +215,7 @@ class PdfStatementService {
             ),
             pw.SizedBox(height: 6),
 
-            // ── TDS Highlight (full width) ────────────────────────────────
+            // ── TDS Highlight bar ─────────────────────────────────────────
             pw.Container(
               width: double.infinity,
               padding:
@@ -291,11 +305,6 @@ class PdfStatementService {
     return doc.save();
   }
 
-  /// Builds the document header matching the reference tax sheet image.
-  /// Layout:
-  ///   - Centered title: "TAX CALCULATION SHEET 2025–2026 (New Regime)"
-  ///   - Two-column row: "Department: Education (Higher Secondary)" | "Office: <institution>"
-  ///   - Single row: "Name: <name>"  |  "PAN: <pan>"
   pw.Widget _buildDocumentHeader({
     required pw.Font base,
     required pw.Font bold,
@@ -324,7 +333,6 @@ class PdfStatementService {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // ── Title row (blue background) ───────────────────────────────
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: pw.BoxDecoration(
@@ -336,7 +344,7 @@ class PdfStatementService {
             ),
             child: pw.Center(
               child: pw.Text(
-                'TAX CALCULATION SHEET  2026 - 2027(New Regime)',
+                'TAX CALCULATION SHEET  2026 - 2027 (New Regime)',
                 style: pw.TextStyle(
                   font: bold,
                   fontSize: 11,
@@ -347,15 +355,12 @@ class PdfStatementService {
               ),
             ),
           ),
-
-          // ── Department | Office row ───────────────────────────────────
           pw.Container(
             color: PdfColors.white,
             padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                
                 pw.Expanded(
                   child: pw.Align(
                     alignment: pw.Alignment.centerRight,
@@ -371,11 +376,7 @@ class PdfStatementService {
               ],
             ),
           ),
-
-          // ── Divider ───────────────────────────────────────────────────
           pw.Divider(color: PdfColors.blueGrey100, thickness: 0.5),
-
-          // ── Name | PEN row ────────────────────────────────────────────
           pw.Container(
             color: PdfColors.white,
             padding: const pw.EdgeInsets.fromLTRB(12, 6, 12, 4),
@@ -417,8 +418,6 @@ class PdfStatementService {
               ],
             ),
           ),
-
-          // ── Designation | PAN row ─────────────────────────────────────
           pw.Container(
             color: PdfColors.white,
             padding: const pw.EdgeInsets.fromLTRB(12, 2, 12, 8),
@@ -455,44 +454,6 @@ class PdfStatementService {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  /// Builds a single key-figure row for the right-side recap box.
-  pw.Widget _keyFigureRow(
-    String label,
-    String value, {
-    required pw.Font base,
-    required pw.Font bold,
-    required double cellSize,
-    bool highlight = false,
-    bool topRadius = false,
-    bool bottomRadius = false,
-  }) {
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-        color: highlight ? PdfColor.fromHex('#EEF2FF') : PdfColors.white,
-      ),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(label,
-              style: highlight
-                  ? pw.TextStyle(
-                      font: bold,
-                      fontSize: cellSize,
-                      fontWeight: pw.FontWeight.bold)
-                  : pw.TextStyle(font: base, fontSize: cellSize)),
-          pw.Text(value,
-              style: highlight
-                  ? pw.TextStyle(
-                      font: bold,
-                      fontSize: cellSize,
-                      fontWeight: pw.FontWeight.bold)
-                  : pw.TextStyle(font: base, fontSize: cellSize)),
         ],
       ),
     );

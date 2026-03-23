@@ -30,13 +30,15 @@ class ItFormDataHiveAdapter extends TypeAdapter<ItFormDataHive> {
       taxAlreadyPaid: fields[10] as String,
       daPercent: fields[11] as String,
       remainingMonths: fields[12] as String,
+      // Graceful fallback for existing saved data that pre-dates this field
+      relief: fields[13] as String? ?? '0',
     );
   }
 
   @override
   void write(BinaryWriter writer, ItFormDataHive obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14) // total fields
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -62,7 +64,9 @@ class ItFormDataHiveAdapter extends TypeAdapter<ItFormDataHive> {
       ..writeByte(11)
       ..write(obj.daPercent)
       ..writeByte(12)
-      ..write(obj.remainingMonths);
+      ..write(obj.remainingMonths)
+      ..writeByte(13)
+      ..write(obj.relief);
   }
 
   @override

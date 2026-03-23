@@ -162,7 +162,6 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Stack(children: [
-        // Decorative circle
         Positioned(
           right: -20,
           top: -20,
@@ -188,7 +187,6 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              // Avatar circle
               Container(
                 width: 48,
                 height: 48,
@@ -278,6 +276,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
 
   // ── TDS hero card ─────────────────────────────────────────────────────────────
   Widget _buildTdsHeroCard(TaxComputationResult r) {
+    final bool hasRelief = r.reliefUs89 > 0;
     return Container(
       decoration: BoxDecoration(
         color: kSurface,
@@ -291,7 +290,6 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
         ],
       ),
       child: Column(children: [
-        // Top teal stripe
         Container(
           height: 4,
           decoration: const BoxDecoration(
@@ -303,7 +301,6 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           child: Column(children: [
-            // TDS per month
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('TDS PER MONTH',
@@ -323,7 +320,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: kAccentLight,
                   shape: BoxShape.circle,
                 ),
@@ -334,7 +331,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
             const SizedBox(height: 16),
             Container(height: 0.5, color: kBorder),
             const SizedBox(height: 14),
-            // 3 summary chips
+            // Row 1: Net Tax | Paid | Balance
             Row(children: [
               _summaryChip('Net Tax',
                   ItFormatters.formatCurrency(r.netTaxPayable), kPrimary),
@@ -347,6 +344,8 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
                   ItFormatters.formatCurrency(r.balanceTaxPayable),
                   r.balanceTaxPayable > 0 ? kHighlight : kAccent),
             ]),
+           
+          
           ]),
         ),
       ]),
@@ -395,7 +394,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
       ),
       const SizedBox(width: 10),
       Text(title,
-          style: TextStyle(
+          style: const TextStyle(
               color: kTextPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
     ]);
   }
@@ -448,13 +447,16 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
                 DataCell(Text(row.monthLabel,
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: other ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight:
+                            other ? FontWeight.w700 : FontWeight.w500,
                         color: other ? kHighlight : kTextPrimary))),
-                DataCell(Text(other ? '—' : ItFormatters.formatCurrency(row.bp),
+                DataCell(Text(
+                    other ? '—' : ItFormatters.formatCurrency(row.bp),
                     style: _cellStyle(other))),
                 DataCell(Text(other ? '—' : '${row.daPercent}%',
                     style: _cellStyle(other))),
-                DataCell(Text(other ? '—' : ItFormatters.formatCurrency(row.da),
+                DataCell(Text(
+                    other ? '—' : ItFormatters.formatCurrency(row.da),
                     style: _cellStyle(other))),
                 DataCell(Text(
                     other ? '—' : ItFormatters.formatCurrency(row.hra),
@@ -464,7 +466,9 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: other ? kHighlight : kPrimary,
-                        fontFeatures: const [FontFeature.tabularFigures()]))),
+                        fontFeatures: const [
+                          FontFeature.tabularFigures()
+                        ]))),
               ],
             );
           }),
@@ -481,6 +485,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
 
   // ── Tax panel ─────────────────────────────────────────────────────────────────
   Widget _buildTaxPanel(TaxComputationResult r) {
+    final bool hasRelief = r.reliefUs89 > 0;
     return Container(
       decoration: BoxDecoration(
         color: kSurface,
@@ -494,6 +499,7 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
         ],
       ),
       child: Column(children: [
+        // Group 1 — income
         _taxGroup([
           _TaxLine('Total Salary Income',
               ItFormatters.formatCurrency(r.totalSalaryIncome)),
@@ -505,11 +511,12 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
               bold: true, highlight: true),
         ], isFirst: true),
         _groupDivider(),
+        // Group 2 — tax computation
         _taxGroup([
           _TaxLine('Tax on Total Income',
               ItFormatters.formatCurrency(r.taxOnIncome)),
-          _TaxLine(
-              'Rebate u/s 87A', '− ${ItFormatters.formatCurrency(r.rebate87A)}',
+          _TaxLine('Rebate u/s 87A',
+              '− ${ItFormatters.formatCurrency(r.rebate87A)}',
               valueColor: kSuccess),
           _TaxLine('Marginal Relief u/s 87A',
               '− ${ItFormatters.formatCurrency(r.marginalRelief)}',
@@ -523,14 +530,27 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
               bold: true, highlight: true),
         ]),
         _groupDivider(),
+        // Group 3 — relief + TDS
         _taxGroup([
+          if (hasRelief)
+            _TaxLine(
+              'Relief for Salary Arrears u/s 89',
+              '− ${ItFormatters.formatCurrency(r.reliefUs89)}',
+              valueColor: kSuccess,
+            ),
+          if (hasRelief)
+            _TaxLine('Tax After Relief',
+                ItFormatters.formatCurrency(r.taxAfterRelief),
+                bold: true, highlight: true),
           _TaxLine('Tax Already Paid',
               '− ${ItFormatters.formatCurrency(r.input.taxAlreadyPaid)}',
               valueColor: kSuccess),
           _TaxLine('Remaining Months', r.input.remainingMonths.toString()),
           _TaxLine('Balance Tax Payable',
               ItFormatters.formatCurrency(r.balanceTaxPayable),
-              bold: true, highlight: true, highlightColor: kHighlight),
+              bold: true,
+              highlight: true,
+              highlightColor: kHighlight),
         ], isLast: true),
       ]),
     );
@@ -563,14 +583,16 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
               child: Text(line.label,
                   style: TextStyle(
                       fontSize: 13.5,
-                      fontWeight: line.bold ? FontWeight.w700 : FontWeight.w400,
+                      fontWeight:
+                          line.bold ? FontWeight.w700 : FontWeight.w400,
                       color: kTextPrimary))),
           Text(line.value,
               style: TextStyle(
                   fontSize: 13.5,
-                  fontWeight: line.bold ? FontWeight.w700 : FontWeight.w500,
-                  color:
-                      line.valueColor ?? (line.bold ? kPrimary : kTextPrimary),
+                  fontWeight:
+                      line.bold ? FontWeight.w700 : FontWeight.w500,
+                  color: line.valueColor ??
+                      (line.bold ? kPrimary : kTextPrimary),
                   fontFeatures: const [FontFeature.tabularFigures()])),
         ]),
       );
@@ -591,8 +613,8 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
             foregroundColor: kPrimary,
             side: const BorderSide(color: kPrimary, width: 1.5),
             minimumSize: const Size(0, 52),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ),
@@ -617,17 +639,19 @@ class _ItStatementScreenState extends State<ItStatementScreen> {
               borderRadius: BorderRadius.circular(12),
               child: const SizedBox(
                 height: 52,
-                child:
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.download_rounded, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text('DOWNLOAD',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5)),
-                ]),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.download_rounded,
+                          color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('DOWNLOAD',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5)),
+                    ]),
               ),
             ),
           ),

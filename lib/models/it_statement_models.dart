@@ -13,6 +13,7 @@ class EmployeeInput {
     required this.taxAlreadyPaid,
     required this.daPercent,
     required this.remainingMonths,
+    required this.relief,
   });
 
   final String name;
@@ -24,14 +25,18 @@ class EmployeeInput {
   final int basicPayMarch2026;
 
   /// The calendar month (1–12) in which the increment takes effect.
-  /// Derived from [nextIncrementDate] by the UI before passing here.
-  final int nextIncrementDate; // stores the month number (1-12)
+  final int nextIncrementDate;
 
   final int bpAfterIncrement;
   final int otherIncome;
   final int taxAlreadyPaid;
   final int daPercent;
   final int remainingMonths;
+
+  /// Relief for Salary Arrears u/s 89(1) — Form 10E.
+  /// Deducted from Net Tax Payable before TDS is calculated.
+  /// Not used in any other computation.
+  final int relief;
 }
 
 class MonthlySalaryRow {
@@ -67,6 +72,8 @@ class TaxComputationResult {
     required this.taxAfterRebate,
     required this.educationCess,
     required this.netTaxPayable,
+    required this.reliefUs89,
+    required this.taxAfterRelief,
     required this.balanceTaxPayable,
     required this.tdsPerMonth,
   });
@@ -82,6 +89,13 @@ class TaxComputationResult {
   final double taxAfterRebate;
   final double educationCess;
   final int netTaxPayable;
+
+  /// Relief u/s 89(1) — deducted from netTaxPayable to get taxAfterRelief.
+  final int reliefUs89;
+
+  /// Net Tax Payable minus Relief u/s 89(1).
+  final int taxAfterRelief;
+
   final int balanceTaxPayable;
   final int tdsPerMonth;
 }

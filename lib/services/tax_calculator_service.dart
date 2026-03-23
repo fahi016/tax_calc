@@ -11,12 +11,9 @@ class TaxCalculatorService {
 
   static const double standardDeduction = 75000;
 
-  static const double rebateLimit =
-      60000; // Max tax eligible for 87A full rebate
-  static const double rebateIncomeThreshold =
-      1200000; // Taxable income below which rebate applies
-  static const double marginalReliefLimit =
-      1270588; // Upper income limit for marginal relief
+  static const double rebateLimit = 60000;
+  static const double rebateIncomeThreshold = 1200000;
+  static const double marginalReliefLimit = 1270588;
 
   static const double educationCessRate = 0.04;
 
@@ -28,12 +25,11 @@ class TaxCalculatorService {
   static const double _slab5 = 2000000;
   static const double _slab6 = 2400000;
 
-  // --- Cumulative tax at each slab boundary ---
-  static const double _taxAt2 = (_slab2 - _slab1) * 0.05; // 20,000
-  static const double _taxAt3 = (_slab3 - _slab2) * 0.10 + _taxAt2; // 60,000
-  static const double _taxAt4 = (_slab4 - _slab3) * 0.15 + _taxAt3; // 1,20,000
-  static const double _taxAt5 = (_slab5 - _slab4) * 0.20 + _taxAt4; // 2,00,000
-  static const double _taxAt6 = (_slab6 - _slab5) * 0.25 + _taxAt5; // 3,00,000
+  static const double _taxAt2 = (_slab2 - _slab1) * 0.05;
+  static const double _taxAt3 = (_slab3 - _slab2) * 0.10 + _taxAt2;
+  static const double _taxAt4 = (_slab4 - _slab3) * 0.15 + _taxAt3;
+  static const double _taxAt5 = (_slab5 - _slab4) * 0.20 + _taxAt4;
+  static const double _taxAt6 = (_slab6 - _slab5) * 0.25 + _taxAt5;
 
   TaxComputationResult compute(EmployeeInput input) {
     final List<MonthlySalaryRow> salaryRows = _buildMonthlyRows(input);
@@ -47,10 +43,8 @@ class TaxCalculatorService {
 
     final double taxOnIncome = _calculateTaxOnIncome(taxableIncome);
 
-    // Full rebate u/s 87A if tax <= rebateLimit
     final double rebate87A = taxOnIncome <= rebateLimit ? taxOnIncome : 0;
 
-    // Marginal relief: applicable when taxable income is between 12L and marginalReliefLimit
     final double marginalRelief = taxableIncome >= rebateIncomeThreshold &&
             taxableIncome <= marginalReliefLimit
         ? taxOnIncome - (taxableIncome - rebateIncomeThreshold)
@@ -60,7 +54,14 @@ class TaxCalculatorService {
         max(0, taxOnIncome - rebate87A - marginalRelief);
     final double educationCess = taxAfterRebate * educationCessRate;
     final int netTaxPayable = (taxAfterRebate + educationCess).round();
-    final int balanceTaxPayable = netTaxPayable - input.taxAlreadyPaid;
+
+    // ── Relief u/s 89(1) ────────────────────────────────────────────────────
+    // Deducted from Net Tax Payable only. Not part of taxable income computation.
+    final int reliefUs89 = input.relief;
+    final int taxAfterRelief = max(0, netTaxPayable - reliefUs89);
+
+    // ── TDS ──────────────────────────────────────────────────────────────────
+    final int balanceTaxPayable = taxAfterRelief - input.taxAlreadyPaid;
     final int tdsPerMonth = (balanceTaxPayable / input.remainingMonths).round();
 
     return TaxComputationResult(
@@ -86,6 +87,8 @@ class TaxCalculatorService {
       taxAfterRebate: taxAfterRebate,
       educationCess: educationCess,
       netTaxPayable: netTaxPayable,
+      reliefUs89: reliefUs89,
+      taxAfterRelief: taxAfterRelief,
       balanceTaxPayable: balanceTaxPayable,
       tdsPerMonth: tdsPerMonth,
     );
@@ -96,16 +99,7 @@ class TaxCalculatorService {
 
     return List<MonthlySalaryRow>.generate(fyMonthCount, (index) {
       final DateTime monthDate = DateTime(start.year, start.month + index);
-      final int month = monthDate.month;
-      final int year = monthDate.year;
 
-      // input.nextIncrementDate stores the calendar month (1-12) of increment.
-      // Use pre-increment BP for months strictly before the increment month.
-      // Because nextIncrementDate is the month FROM which the new BP applies,
-      // we compare: if year < increment's year OR (same year and month < increment month) => old BP.
-      //
-      // The increment month (1-12) maps to a year:
-      //   months 3-12 => year 2026, months 1-2 => year 2027
       final int incrementYear =
           input.nextIncrementDate >= 3 ? fyStartYear : fyStartYear + 1;
       final DateTime incrementFrom =
@@ -130,11 +124,6 @@ class TaxCalculatorService {
     });
   }
 
-  /// HRA formula from Excel — local body type determines rate, min and max.
-  /// Corporation:             MIN(MAX(BP×10%, 2300), 10000)
-  /// Municipalities in Dist HQ: MIN(MAX(BP×8%,  2000),  8000)
-  /// Municipalities:          MIN(MAX(BP×6%,  1500),  6000)
-  /// Panchayaths:             MIN(MAX(BP×4%,  1200),  4000)
   double _calculateHra(double bp, String localBodyType) {
     switch (localBodyType) {
       case 'Corporation':
