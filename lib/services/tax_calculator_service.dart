@@ -99,13 +99,24 @@ class TaxCalculatorService {
       final int month = monthDate.month;
       final int year = monthDate.year;
 
-      // Use pre-increment BP for months before the increment month in the FY start year
-      final int bp = year == fyStartYear && month < input.incrementMonth
-          ? input.basicPayMarch2026
-          : input.bpAfterIncrement;
+      // input.nextIncrementDate stores the calendar month (1-12) of increment.
+      // Use pre-increment BP for months strictly before the increment month.
+      // Because nextIncrementDate is the month FROM which the new BP applies,
+      // we compare: if year < increment's year OR (same year and month < increment month) => old BP.
+      //
+      // The increment month (1-12) maps to a year:
+      //   months 3-12 => year 2026, months 1-2 => year 2027
+      final int incrementYear =
+          input.nextIncrementDate >= 3 ? fyStartYear : fyStartYear + 1;
+      final DateTime incrementFrom =
+          DateTime(incrementYear, input.nextIncrementDate);
+
+      final bool useOldBp = monthDate.isBefore(incrementFrom);
+      final int bp =
+          useOldBp ? input.basicPayMarch2026 : input.bpAfterIncrement;
 
       final double da = bp * (input.daPercent / 100);
-      final double hra = min(bp * 4 / 100, 4000);
+      final double hra = _calculateHra(bp.toDouble(), input.localBodyType);
       final double grossPay = bp + da + hra;
 
       return MonthlySalaryRow(
@@ -117,6 +128,25 @@ class TaxCalculatorService {
         grossPay: grossPay,
       );
     });
+  }
+
+  /// HRA formula from Excel — local body type determines rate, min and max.
+  /// Corporation:             MIN(MAX(BP×10%, 2300), 10000)
+  /// Municipalities in Dist HQ: MIN(MAX(BP×8%,  2000),  8000)
+  /// Municipalities:          MIN(MAX(BP×6%,  1500),  6000)
+  /// Panchayaths:             MIN(MAX(BP×4%,  1200),  4000)
+  double _calculateHra(double bp, String localBodyType) {
+    switch (localBodyType) {
+      case 'Corporation':
+        return min(max(bp * 0.10, 2300), 10000);
+      case 'Municipalities in Dist HQ':
+        return min(max(bp * 0.08, 2000), 8000);
+      case 'Municipalities':
+        return min(max(bp * 0.06, 1500), 6000);
+      case 'Panchayaths':
+      default:
+        return min(max(bp * 0.04, 1200), 4000);
+    }
   }
 
   double _calculateTaxOnIncome(double taxableIncome) {

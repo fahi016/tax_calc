@@ -3,8 +3,11 @@ class EmployeeInput {
     required this.name,
     required this.pen,
     required this.pan,
+    required this.designation,
+    required this.institution,
+    required this.localBodyType,
     required this.basicPayMarch2026,
-    required this.incrementMonth,
+    required this.nextIncrementDate,
     required this.bpAfterIncrement,
     required this.otherIncome,
     required this.taxAlreadyPaid,
@@ -15,8 +18,15 @@ class EmployeeInput {
   final String name;
   final int pen;
   final String pan;
+  final String designation;
+  final String institution;
+  final String localBodyType;
   final int basicPayMarch2026;
-  final int incrementMonth;
+
+  /// The calendar month (1–12) in which the increment takes effect.
+  /// Derived from [nextIncrementDate] by the UI before passing here.
+  final int nextIncrementDate; // stores the month number (1-12)
+
   final int bpAfterIncrement;
   final int otherIncome;
   final int taxAlreadyPaid;
