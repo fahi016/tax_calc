@@ -363,7 +363,7 @@ class PdfStatementService {
               children: [
                 pw.Expanded(
                   child: pw.Align(
-                    alignment: pw.Alignment.centerRight,
+                    alignment: pw.Alignment.center,
                     child: pw.RichText(
                       text: pw.TextSpan(children: [
                         pw.TextSpan(text: 'Office:  ', style: labelStyle),
