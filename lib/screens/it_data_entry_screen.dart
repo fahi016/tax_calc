@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:tax_calc/db/form_persistence_service.dart';
+import 'package:tax_calc/db/it_form_data_hive.dart';
 import 'package:tax_calc/models/it_statement_models.dart';
 import 'package:tax_calc/screens/it_statement_screen.dart';
 import 'package:tax_calc/services/tax_calculator_service.dart';
@@ -17,6 +19,10 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TaxCalculatorService _calculatorService = TaxCalculatorService();
 
+  // ── Persistence ─────────────────────────────────────────────────────────────
+  final FormPersistenceService _persistence = FormPersistenceService();
+
+  // ── Controllers ─────────────────────────────────────────────────────────────
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _designationController = TextEditingController();
   final TextEditingController _penController = TextEditingController();
@@ -44,25 +50,64 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     'Corporation'
   ];
   static const List<String> _monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
+
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
+    _loadSavedData();
     _basicPayController.addListener(_autoCalcBp);
   }
+
+  /// Populate controllers from the Hive draft (if one exists).
+  void _loadSavedData() {
+    final ItFormDataHive? saved = _persistence.load();
+    if (saved == null) return;
+
+    _nameController.text = saved.name;
+    _penController.text = saved.pen;
+    _panController.text = saved.pan;
+    _designationController.text = saved.designation;
+    _institutionController.text = saved.institution;
+    _basicPayController.text = saved.basicPayMarch2026;
+    _bpAfterIncrementController.text = saved.bpAfterIncrement;
+    _otherIncomeController.text = saved.otherIncome;
+    _taxAlreadyPaidController.text = saved.taxAlreadyPaid;
+    _daPercentController.text = saved.daPercent;
+    _remainingMonthsController.text = saved.remainingMonths;
+
+    setState(() {
+      _selectedLocalBody = saved.localBodyType;
+      _selectedIncrementMonth =
+          saved.nextIncrementMonth == -1 ? null : saved.nextIncrementMonth;
+    });
+  }
+
+  /// Snapshot every controller + dropdown value into Hive.
+  Future<void> _saveData() async {
+    final data = ItFormDataHive(
+      name: _nameController.text.trim(),
+      pen: _penController.text.trim(),
+      pan: _panController.text.trim().toUpperCase(),
+      designation: _designationController.text.trim(),
+      institution: _institutionController.text.trim(),
+      localBodyType: _selectedLocalBody,
+      basicPayMarch2026: _basicPayController.text.trim(),
+      nextIncrementMonth: _selectedIncrementMonth ?? -1,
+      bpAfterIncrement: _bpAfterIncrementController.text.trim(),
+      otherIncome: _otherIncomeController.text.trim(),
+      taxAlreadyPaid: _taxAlreadyPaidController.text.trim(),
+      daPercent: _daPercentController.text.trim(),
+      remainingMonths: _remainingMonthsController.text.trim(),
+    );
+    await _persistence.save(data);
+  }
+
+  // ── Auto-calc BP after increment ─────────────────────────────────────────────
 
   void _autoCalcBp() {
     final int? bp = int.tryParse(_basicPayController.text.trim());
@@ -115,7 +160,9 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     super.dispose();
   }
 
-  void _viewStatement() {
+  // ── View statement ────────────────────────────────────────────────────────────
+
+  Future<void> _viewStatement() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedIncrementMonth == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -126,6 +173,10 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       ));
       return;
     }
+
+    // Persist before navigating away.
+    await _saveData();
+
     final EmployeeInput input = EmployeeInput(
       name: _nameController.text.trim(),
       pen: int.parse(_penController.text.trim()),
@@ -142,10 +193,60 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
       remainingMonths: int.parse(_remainingMonthsController.text.trim()),
     );
     final TaxComputationResult result = _calculatorService.compute(input);
+
+    if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => ItStatementScreen(result: result),
     ));
   }
+
+  // ── Clear form ─────────────────────────────────────────────────────────────
+
+  Future<void> _clearForm() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Clear Form?',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text(
+            'All entered data will be removed and the saved draft deleted.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: kError),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Clear')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _persistence.clear();
+
+    _nameController.clear();
+    _designationController.clear();
+    _penController.clear();
+    _panController.clear();
+    _institutionController.clear();
+    _basicPayController.clear();
+    _bpAfterIncrementController.clear();
+    _otherIncomeController.text = '0';
+    _taxAlreadyPaidController.text = '0';
+    _daPercentController.text = '35';
+    _remainingMonthsController.text = '12';
+
+    setState(() {
+      _selectedLocalBody = 'Panchayaths';
+      _selectedIncrementMonth = null;
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +341,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
                       type: TextInputType.number,
                       formatters: [FilteringTextInputFormatter.digitsOnly],
                       suffix: '%',
-                      validator: (v) => _validateInt(v, name: 'DA %', min: 0)),
+                      validator: (v) =>
+                          _validateInt(v, name: 'DA %', min: 0)),
                   _gap(),
                   _styledDropdown<int>(
                     label: 'Increment Month',
@@ -263,7 +365,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
                       validator: (v) =>
                           _validateInt(v, name: 'BP After Increment', min: 0)),
                   _gap(),
-                  _field(_otherIncomeController,
+                  _field(
+                      _otherIncomeController,
                       'Other Income (Arrears / Surrender / Festival Allowance etc.)',
                       icon: Icons.add_circle_outline_rounded,
                       type: TextInputType.number,
@@ -299,6 +402,9 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
               ),
               const SizedBox(height: 28),
               _buildSubmitButton(),
+              const SizedBox(height: 12),
+              // ── Clear button (only shown when a draft exists) ─────────────
+              if (_persistence.hasSavedData) _buildClearButton(),
               const SizedBox(height: 16),
               _buildFooter(),
             ],
@@ -309,6 +415,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── AppBar ────────────────────────────────────────────────────────────────────
+
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       title: Row(children: [
@@ -356,6 +463,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── Hero header ───────────────────────────────────────────────────────────────
+
   Widget _buildHeroHeader() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -402,6 +510,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── Section card ──────────────────────────────────────────────────────────────
+
   Widget _buildSection({
     required IconData icon,
     required String title,
@@ -453,6 +562,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── Text field ────────────────────────────────────────────────────────────────
+
   Widget _field(
     TextEditingController controller,
     String label, {
@@ -490,6 +600,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── Styled dropdown ───────────────────────────────────────────────────────────
+
   Widget _styledDropdown<T>({
     required String label,
     required IconData icon,
@@ -522,6 +633,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   SizedBox _gap() => const SizedBox(height: 14);
 
   // ── Submit button ─────────────────────────────────────────────────────────────
+
   Widget _buildSubmitButton() {
     return Container(
       decoration: BoxDecoration(
@@ -543,7 +655,8 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
           splashColor: Colors.white.withOpacity(0.1),
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            child:
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
               Text('VIEW TAX STATEMENT',
@@ -559,7 +672,25 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
     );
   }
 
+  // ── Clear button ──────────────────────────────────────────────────────────────
+
+  Widget _buildClearButton() {
+    return OutlinedButton.icon(
+      onPressed: _clearForm,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kError,
+        side: const BorderSide(color: kError),
+        minimumSize: const Size(double.infinity, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+      label: const Text('Clear Data',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+    );
+  }
+
   // ── Footer ────────────────────────────────────────────────────────────────────
+
   Widget _buildFooter() {
     return Center(
       child: Row(mainAxisSize: MainAxisSize.min, children: const [
@@ -572,6 +703,7 @@ class _ItDataEntryScreenState extends State<ItDataEntryScreen> {
   }
 
   // ── Validators ────────────────────────────────────────────────────────────────
+
   String? _validateInt(String? value,
       {required String name, required int min, int? max}) {
     if (value == null || value.trim().isEmpty) return '$name is required';

@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:tax_calc/db/form_persistence_service.dart';
 import 'package:tax_calc/screens/it_data_entry_screen.dart';
 
 // ── Brand Palette ─────────────────────────────────────────────────────────────
-// Primary: Deep Indigo-Blue (trust, authority — like HDFC/SBI apps)
-// Accent:  Teal-Green (positive, financial growth)
-// Surface: Warm off-white (not clinical white — feels premium)
-
-const Color kPrimary = Color(0xFF1A3C6E); // deep indigo blue
-const Color kPrimaryLight = Color(0xFF2A5298); // medium blue
-const Color kPrimaryDark = Color(0xFF0F2447); // darkest blue (appbar)
-const Color kAccent = Color(0xFF00897B); // teal green (positive values)
-const Color kAccentLight = Color(0xFFE0F2F1); // teal tint background
-const Color kHighlight = Color(0xFFF57C00); // amber (TDS highlight)
-const Color kHighlightBg = Color(0xFFFFF8EE); // amber tint
-const Color kBackground = Color(0xFFF0F4F8); // cool light grey
+const Color kPrimary = Color(0xFF1A3C6E);
+const Color kPrimaryLight = Color(0xFF2A5298);
+const Color kPrimaryDark = Color(0xFF0F2447);
+const Color kAccent = Color(0xFF00897B);
+const Color kAccentLight = Color(0xFFE0F2F1);
+const Color kHighlight = Color(0xFFF57C00);
+const Color kHighlightBg = Color(0xFFFFF8EE);
+const Color kBackground = Color(0xFFF0F4F8);
 const Color kSurface = Color(0xFFFFFFFF);
-const Color kSurfaceAlt = Color(0xFFF7F9FC); // zebra row, section header
+const Color kSurfaceAlt = Color(0xFFF7F9FC);
 const Color kBorder = Color(0xFFDDE4EE);
 const Color kBorderStrong = Color(0xFFB8C4D6);
 const Color kTextPrimary = Color(0xFF0F1D35);
@@ -26,14 +23,19 @@ const Color kError = Color(0xFFD32F2F);
 const Color kSuccess = Color(0xFF00897B);
 const Color kSuccessBg = Color(0xFFE0F2F1);
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Initialise Hive persistence ────────────────────────────────────────────
+  await FormPersistenceService.init();
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: kPrimaryDark,
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: kBackground,
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
+
   runApp(const ItStatementApp());
 }
 
